@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>App Abastecimento V3</title>
+<link rel="manifest" href="manifest.json">
+<style>
+body { font-family: Arial; max-width: 600px; margin: auto; padding: 15px; background:#f5f5f5; }
+h2 { text-align:center; }
+input, select, button { width:100%; padding:10px; margin:5px 0; }
+button { background:#1565c0; color:white; border:none; border-radius:6px; }
+.card { background:white; padding:10px; margin-top:10px; border-radius:8px; }
+.result { font-weight:bold; margin-top:10px; }
+</style>
+</head>
+<body>
+
+<h2>Controle de Abastecimento</h2>
+
+<input id="veiculo" placeholder="Nome do veículo">
+<select id="combustivel"><option>Gasolina</option><option>Etanol</option></select>
+<input type="number" id="kmInicial" placeholder="Km Inicial">
+<input type="number" id="kmFinal" placeholder="Km Final">
+<input type="number" id="kmPainel" placeholder="Km/L painel">
+<input type="number" id="litrosReal" placeholder="Litros abastecidos">
+<input type="number" id="preco" placeholder="Preço combustível">
+
+<button onclick="registrar()">Registrar</button>
+<div class="result" id="resultado"></div>
+<button onclick="exportarCSV()">Exportar CSV</button>
+<div id="media"></div>
+<div id="historico"></div>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+
+function registrar(){
+let v=veiculo.value;
+let c=combustivel.value;
+let ki=+kmInicial.value;
+let kf=+kmFinal.value;
+let kp=+kmPainel.value;
+let lr=+litrosReal.value;
+let p=+preco.value;
+if(kf<=ki||kp<=0||lr<=0||p<=0){resultado.innerText="Erro";return}
+let km=kf-ki;
+let consumo=km/lr;
+let est=km/kp;
+let erro=((est-lr)/lr)*100;
+let total=lr*p;
+let custoKm=total/km;
+let data=new Date().toLocaleString();
+let reg={v,c,km,consumo,erro,total,custoKm,data};
+let h=JSON.parse(localStorage.getItem("dados")||"[]");
+h.push(reg);
+localStorage.setItem("dados",JSON.stringify(h));
+resultado.innerHTML=`Km: ${km.toFixed(1)} | Total: R$ ${total.toFixed(2)}`;
+mostrar();
+}
+
+function mostrar(){
+let h=JSON.parse(localStorage.getItem("dados")||"[]");
+let div=historico; div.innerHTML="";
+let stats={};
+
+h.slice().reverse().forEach(i=>{
+if(!stats[i.v]) stats[i.v]={km:0,litros:0,total:0};
+stats[i.v].km+=i.km;
+stats[i.v].litros+=i.km/i.consumo;
+stats[i.v].total+=i.total;
+
+div.innerHTML+=`<div class="card"><b>${i.v}</b> - ${i.c}<br>${i.data}<br>Km: ${i.km.toFixed(1)}<br>Consumo: ${i.consumo.toFixed(2)} km/L<br>Total: R$ ${i.total.toFixed(2)}</div>`;
+});
+
+let m="<h3>Média por veículo</h3>";
+for(let v in stats){
+let s=stats[v];
+let media=s.km/s.litros;
+let custo=s.total/s.km;
+m+=`<div class="card"><b>${v}</b><br>Média: ${media.toFixed(2)} km/L<br>Custo/km: R$ ${custo.toFixed(2)}</div>`;
+}
+media.innerHTML=m;
+}
+
+function exportarCSV(){
+let h=JSON.parse(localStorage.getItem("dados")||"[]");
+let csv="Veiculo,Combustivel,Data,Km,Consumo,Erro,Total,CustoKm\n";
+h.forEach(i=>{csv+=`${i.v},${i.c},${i.data},${i.km},${i.consumo},${i.erro},${i.total},${i.custoKm}\n`;});
+let blob=new Blob([csv],{type:"text/csv"});
+let a=document.createElement("a");
+a.href=URL.createObjectURL(blob);
+a.download="historico.csv";
+a.click();
+}
+
+mostrar();
+</script>
+
+</body>
+</html>
+
+<!-- MANIFEST.JSON (crie separado) -->
+{
+  "name": "Controle Abastecimento",
+  "short_name": "Abastecimento",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1565c0",
+  "icons": [{
+    "src": "icon.png",
+    "sizes": "192x192",
+    "type": "image/png"
+  }]
+}
+
+<!-- SW.JS (crie separado) -->
+const CACHE = "app-v1";
+const urls = ["index.html"];
+self.addEventListener("install", e => {
+  e.waitUntil(caches.open(CACHE).then(cache => cache.addAll(urls)));
+});
+self.addEventListener("fetch", e => {
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+});
